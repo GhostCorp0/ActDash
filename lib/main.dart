@@ -5,13 +5,29 @@ import 'package:percent_indicator/percent_indicator.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 import 'dart:async';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 import 'services/github_api_service.dart';
 import 'services/auth_service.dart';
+import 'services/firestore_service.dart';
+import 'models/project.dart';
 import 'screens/settings_screen.dart';
 import 'screens/login_screen.dart';
+import 'screens/add_project_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialize Firebase
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    print('✅ Firebase initialized successfully');
+  } catch (e) {
+    print('❌ Firebase initialization error: $e');
+  }
+  
   await AuthService.initializeAuth();
   runApp(const GitHubActionsDashboard());
 }
@@ -36,6 +52,7 @@ class GitHubActionsDashboard extends StatelessWidget {
       routes: {
         '/dashboard': (context) => const DashboardScreen(),
         '/login': (context) => const LoginScreen(),
+        '/add-project': (context) => const AddProjectScreen(),
       },
     );
   }
@@ -117,6 +134,103 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   int _selectedIndex = 0;
+  List<Project> _projects = [];
+  String? _selectedProjectId;
+  bool _isLoadingProjects = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProjects();
+  }
+
+  Future<void> _loadProjects() async {
+    try {
+      final userId = AuthService.userId;
+      print('=== PROJECT LOADING DEBUG ===');
+      print('AuthService.userId: $userId');
+      print('AuthService.userEmail: ${AuthService.userEmail}');
+      print('AuthService.isLoggedIn: ${AuthService.isLoggedIn}');
+      
+      if (userId != null) {
+        print('🔄 Loading all projects from projects collection');
+        print('📁 Firestore path: projects (no user filtering)');
+        print('🔍 Query: collection("projects") - fetching ALL documents');
+        
+        FirestoreService.getProjects(userId).listen((projects) {
+          print('✅ Received ${projects.length} projects from Firestore');
+          if (projects.isEmpty) {
+            print('⚠️  No projects found in the projects collection');
+            print('💡 Make sure you have projects in Firestore at: projects/{documentId}');
+          } else {
+            for (var project in projects) {
+              print('  📁 Project: ${project.name} (${project.fullRepositoryName}) - ID: ${project.id}');
+              print('    - Owner: ${project.owner}');
+              print('    - Repository: ${project.repository}');
+              print('    - Created: ${project.createdAt}');
+              print('    - Active: ${project.isActive}');
+            }
+          }
+          
+          setState(() {
+            _projects = projects;
+            _isLoadingProjects = false;
+            print('🔄 Updated state with ${projects.length} projects');
+            
+            // Set selected project if not already set
+            if (_selectedProjectId == null && projects.isNotEmpty) {
+              _selectedProjectId = projects.first.id;
+              print('🎯 Auto-selected project: ${projects.first.name} (ID: ${projects.first.id})');
+              // Force a rebuild to load the selected project's data
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                setState(() {});
+                print('🔄 Triggered rebuild after auto-selecting project');
+              });
+            } else if (projects.isEmpty) {
+              print('⚠️  No projects available to select');
+            }
+          });
+        }, onError: (error) {
+          print('❌ Error loading projects: $error');
+          print('🔍 Check Firestore rules and collection structure');
+          setState(() {
+            _isLoadingProjects = false;
+          });
+        });
+      } else {
+        print('❌ No user ID found - user not logged in');
+        setState(() {
+          _isLoadingProjects = false;
+        });
+      }
+    } catch (e) {
+      print('❌ Exception loading projects: $e');
+      setState(() {
+        _isLoadingProjects = false;
+      });
+    }
+    print('=== END PROJECT LOADING DEBUG ===');
+  }
+
+  // Manual refresh method for debugging
+  Future<void> _refreshProjects() async {
+    print('🔄 Manual project refresh triggered');
+    setState(() {
+      _isLoadingProjects = true;
+    });
+    await _loadProjects();
+  }
+
+  void _onProjectChanged(String? projectId) {
+    setState(() {
+      _selectedProjectId = projectId;
+    });
+    // Reload dashboard data when project changes
+    if (projectId != null) {
+      // Trigger a rebuild of the dashboard with the new project
+      setState(() {});
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -138,28 +252,200 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 // Header
                 Container(
                   padding: const EdgeInsets.all(24),
-                  child: Row(
+                  child: Column(
                     children: [
-                      Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF3B82F6),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Icon(
-                          Icons.rocket_launch,
-                          color: Colors.white,
-                          size: 20,
-                        ),
+                      Row(
+                        children: [
+                          Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF3B82F6),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(
+                              Icons.rocket_launch,
+                              color: Colors.white,
+                              size: 20,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Text(
+                            'ActDash',
+                            style: GoogleFonts.inter(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 12),
-                      Text(
-                        'GitHub Actions',
-                        style: GoogleFonts.inter(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                      const SizedBox(height: 16),
+                      // Project Selection Dropdown
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0F172A),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFF334155)),
+                        ),
+                        child: _isLoadingProjects
+                            ? const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 12),
+                                child: Center(
+                                  child: SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF3B82F6)),
+                                    ),
+                                  ),
+                                ),
+                              )
+                            : DropdownButtonHideUnderline(
+                                child: DropdownButton<String>(
+                                  value: _selectedProjectId,
+                                  hint: Text(
+                                    _projects.isEmpty 
+                                      ? 'No Projects Found - Click "Add Project" or check Firestore' 
+                                      : 'Select Project (${_projects.length} available)',
+                                    style: GoogleFonts.inter(
+                                      color: const Color(0xFF94A3B8),
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                  icon: const Icon(
+                                    Icons.keyboard_arrow_down,
+                                    color: const Color(0xFF94A3B8),
+                                    size: 20,
+                                  ),
+                                  dropdownColor: const Color(0xFF1E293B),
+                                  style: GoogleFonts.inter(
+                                    color: Colors.white,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                  underline: Container(), // Remove default underline
+                                  isExpanded: true, // Make dropdown expand to fill container
+                                  menuMaxHeight: 300, // Limit dropdown height
+                                  items: [
+                                    ..._projects.map((Project project) {
+                                      return DropdownMenuItem<String>(
+                                        value: project.id,
+                                        child: Row(
+                                          children: [
+                                            const Icon(
+                                              Icons.folder,
+                                              color: Color(0xFF3B82F6),
+                                              size: 16,
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Text(
+                                                    project.name,
+                                                    style: GoogleFonts.inter(
+                                                      color: Colors.white,
+                                                      fontSize: 14,
+                                                      fontWeight: FontWeight.w500,
+                                                    ),
+                                                  ),
+                                                  Text(
+                                                    project.fullRepositoryName,
+                                                    style: GoogleFonts.inter(
+                                                      color: const Color(0xFF94A3B8),
+                                                      fontSize: 12,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    }).toList(),
+                                    if (_projects.isNotEmpty)
+                                      const DropdownMenuItem<String>(
+                                        enabled: false,
+                                        child: Divider(color: Color(0xFF334155)),
+                                      ),
+                                    DropdownMenuItem<String>(
+                                      value: null,
+                                      child: Row(
+                                        children: [
+                                          const Icon(
+                                            Icons.add,
+                                            color: Color(0xFF3B82F6),
+                                            size: 16,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            _projects.isEmpty ? 'Add Project' : 'Manage Projects',
+                                            style: GoogleFonts.inter(
+                                              color: const Color(0xFF3B82F6),
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                  onChanged: (String? projectId) {
+                                    if (projectId == null) {
+                                      // Navigate to add project screen
+                                      Navigator.of(context).pushNamed('/add-project');
+                                    } else {
+                                      _onProjectChanged(projectId);
+                                    }
+                                  },
+                                ),
+                              ),
+                      ),
+                      // Debug button to check Firestore
+                      Container(
+                        margin: const EdgeInsets.only(top: 8),
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: () {
+                              print('=== MANUAL DEBUG CHECK ===');
+                              print('Current user ID: ${AuthService.userId}');
+                              print('Current projects count: ${_projects.length}');
+                              if (_projects.isNotEmpty) {
+                                final selectedProject = _projects.firstWhere(
+                                  (p) => p.id == _selectedProjectId,
+                                  orElse: () => _projects.first,
+                                );
+                                print('Selected project: ${selectedProject.name}');
+                              } else {
+                                print('⚠️  No projects found in current state');
+                              }
+                              print('Is loading projects: $_isLoadingProjects');
+                              _refreshProjects(); // Use the new refresh method
+                            },
+                            icon: const Icon(Icons.bug_report, size: 16),
+                            label: Text(
+                              'Debug: Check Projects (${_projects.length})',
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFFEF4444),
+                              side: const BorderSide(color: Color(0xFFEF4444)),
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                          ),
                         ),
                       ),
                     ],
@@ -174,7 +460,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       _buildNavItem(Icons.dashboard, 'Dashboard', 0),
                       _buildNavItem(Icons.analytics, 'Analytics', 1),
                       _buildNavItem(Icons.history, 'Build History', 2),
-                      _buildNavItem(Icons.settings, 'Settings', 3),
                     ],
                   ),
                 ),
@@ -292,21 +577,34 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildMainContent() {
     switch (_selectedIndex) {
       case 0:
-        return const DashboardView();
+        final selectedProject = _selectedProjectId != null && _projects.isNotEmpty
+          ? _projects.firstWhere(
+              (p) => p.id == _selectedProjectId,
+              orElse: () => _projects.first,
+            )
+          : _projects.isNotEmpty ? _projects.first : null;
+        print('🎯 DashboardView - selectedProject: ${selectedProject?.name} (${selectedProject?.id})');
+        return DashboardView(project: selectedProject);
       case 1:
         return const AnalyticsView();
       case 2:
         return const BuildHistoryView();
-      case 3:
-        return const SettingsScreen();
       default:
-        return const DashboardView();
+        final selectedProject = _selectedProjectId != null && _projects.isNotEmpty
+          ? _projects.firstWhere(
+              (p) => p.id == _selectedProjectId,
+              orElse: () => _projects.first,
+            )
+          : _projects.isNotEmpty ? _projects.first : null;
+        return DashboardView(project: selectedProject);
     }
   }
 }
 
 class DashboardView extends StatefulWidget {
-  const DashboardView({super.key});
+  final Project? project;
+  
+  const DashboardView({super.key, this.project});
 
   @override
   State<DashboardView> createState() => _DashboardViewState();
@@ -317,7 +615,6 @@ class _DashboardViewState extends State<DashboardView> {
   RepositoryStats? _repositoryStats;
   bool _isLoading = true;
   String? _error;
-  bool _isDemoMode = false;
   Timer? _refreshTimer;
 
   @override
@@ -327,6 +624,16 @@ class _DashboardViewState extends State<DashboardView> {
     _startAutoRefresh();
   }
 
+  @override
+  void didUpdateWidget(DashboardView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Reload data when project changes
+    if (oldWidget.project?.id != widget.project?.id) {
+      print('🔄 Project changed, reloading data');
+      _loadData();
+    }
+  }
+
   Future<void> _loadData() async {
     setState(() {
       _isLoading = true;
@@ -334,20 +641,19 @@ class _DashboardViewState extends State<DashboardView> {
     });
 
     try {
-      // Check if GitHub is configured
-      final token = await GitHubApiService.getToken();
-      final repoInfo = await GitHubApiService.getRepositoryInfo();
-
-      if (token == null || repoInfo['owner'] == null || repoInfo['repo'] == null) {
-        // Show demo data if GitHub is not configured
+      // Check if a project is selected
+      final project = widget.project;
+      if (project == null) {
         setState(() {
-          _isDemoMode = true;
-          _workflowRuns = _getDemoWorkflowRuns();
-          _repositoryStats = _getDemoRepositoryStats();
+          _error = 'No project selected. Please select a project from the dropdown.';
           _isLoading = false;
         });
         return;
       }
+
+      // Configure GitHub API with project settings
+      await GitHubApiService.setToken(project.githubToken);
+      await GitHubApiService.setRepositoryInfo(project.owner, project.repository);
 
       // Load data in parallel
       final futures = await Future.wait([
@@ -377,7 +683,6 @@ class _DashboardViewState extends State<DashboardView> {
         _workflowRuns = workflowRuns;
         _repositoryStats = repositoryStats;
         _isLoading = false;
-        _isDemoMode = false;
       });
     } catch (e) {
       setState(() {
@@ -417,171 +722,25 @@ class _DashboardViewState extends State<DashboardView> {
     return months[month - 1];
   }
 
-  // Demo data for when GitHub is not configured
-  List<WorkflowRun> _getDemoWorkflowRuns() {
-    final now = DateTime.now();
-    return [
-      WorkflowRun(
-        id: 1,
-        name: 'CI/CD Pipeline',
-        headBranch: 'main',
-        headSha: 'abc123',
-        runNumber: '1',
-        event: 'push',
-        status: 'completed',
-        conclusion: 'success',
-        workflowId: 1,
-        workflowName: 'CI/CD Pipeline',
-        createdAt: now.subtract(const Duration(minutes: 5)),
-        updatedAt: now.subtract(const Duration(minutes: 2)),
-        runStartedAt: now.subtract(const Duration(minutes: 4)),
-        completedAt: now.subtract(const Duration(minutes: 2)),
-        actor: 'demo-user',
-        triggeringActor: 'demo-user',
-        runAttempt: '1',
-        runStartedAtString: now.subtract(const Duration(minutes: 4)).toIso8601String(),
-        stepsCount: 8,
-        completedStepsCount: 8,
-        headCommit: 'Add new feature implementation',
-      ),
-      WorkflowRun(
-        id: 2,
-        name: 'Test Suite',
-        headBranch: 'feature/auth',
-        headSha: 'def456',
-        runNumber: '2',
-        event: 'pull_request',
-        status: 'completed',
-        conclusion: 'failure',
-        workflowId: 2,
-        workflowName: 'Test Suite',
-        createdAt: now.subtract(const Duration(hours: 2)),
-        updatedAt: now.subtract(const Duration(hours: 1, minutes: 30)),
-        runStartedAt: now.subtract(const Duration(hours: 1, minutes: 45)),
-        completedAt: now.subtract(const Duration(hours: 1, minutes: 30)),
-        actor: 'demo-user',
-        triggeringActor: 'demo-user',
-        runAttempt: '1',
-        runStartedAtString: now.subtract(const Duration(hours: 1, minutes: 45)).toIso8601String(),
-        stepsCount: 12,
-        completedStepsCount: 10,
-        headCommit: 'Fix authentication bug',
-      ),
-      WorkflowRun(
-        id: 3,
-        name: 'Deploy to Production',
-        headBranch: 'main',
-        headSha: 'ghi789',
-        runNumber: '3',
-        event: 'push',
-        status: 'completed',
-        conclusion: 'success',
-        workflowId: 3,
-        workflowName: 'Deploy to Production',
-        createdAt: now.subtract(const Duration(hours: 4)),
-        updatedAt: now.subtract(const Duration(hours: 3, minutes: 45)),
-        runStartedAt: now.subtract(const Duration(hours: 3, minutes: 50)),
-        completedAt: now.subtract(const Duration(hours: 3, minutes: 45)),
-        actor: 'demo-user',
-        triggeringActor: 'demo-user',
-        runAttempt: '1',
-        runStartedAtString: now.subtract(const Duration(hours: 3, minutes: 50)).toIso8601String(),
-        stepsCount: 15,
-        completedStepsCount: 15,
-        headCommit: 'Release v1.2.0',
-      ),
-      WorkflowRun(
-        id: 4,
-        name: 'Security Scan',
-        headBranch: 'develop',
-        headSha: 'jkl012',
-        runNumber: '4',
-        event: 'push',
-        status: 'completed',
-        conclusion: 'success',
-        workflowId: 4,
-        workflowName: 'Security Scan',
-        createdAt: now.subtract(const Duration(hours: 6)),
-        updatedAt: now.subtract(const Duration(hours: 5, minutes: 30)),
-        runStartedAt: now.subtract(const Duration(hours: 5, minutes: 35)),
-        completedAt: now.subtract(const Duration(hours: 5, minutes: 30)),
-        actor: 'demo-user',
-        triggeringActor: 'demo-user',
-        runAttempt: '1',
-        runStartedAtString: now.subtract(const Duration(hours: 5, minutes: 35)).toIso8601String(),
-        stepsCount: 6,
-        completedStepsCount: 6,
-        headCommit: 'Update dependencies',
-      ),
-      WorkflowRun(
-        id: 5,
-        name: 'Build and Test',
-        headBranch: 'feature/ui',
-        headSha: 'mno345',
-        runNumber: '5',
-        event: 'pull_request',
-        status: 'completed',
-        conclusion: 'success',
-        workflowId: 5,
-        workflowName: 'Build and Test',
-        createdAt: now.subtract(const Duration(hours: 8)),
-        updatedAt: now.subtract(const Duration(hours: 7, minutes: 15)),
-        runStartedAt: now.subtract(const Duration(hours: 7, minutes: 20)),
-        completedAt: now.subtract(const Duration(hours: 7, minutes: 15)),
-        actor: 'demo-user',
-        triggeringActor: 'demo-user',
-        runAttempt: '1',
-        runStartedAtString: now.subtract(const Duration(hours: 7, minutes: 20)).toIso8601String(),
-        stepsCount: 10,
-        completedStepsCount: 10,
-        headCommit: 'Improve UI components',
-      ),
-    ];
-  }
 
-  RepositoryStats _getDemoRepositoryStats() {
-    return RepositoryStats(
-      name: 'demo-repo',
-      fullName: 'demo-user/demo-repo',
-      description: 'A demo repository for GitHub Actions Dashboard',
-      stargazersCount: 42,
-      watchersCount: 8,
-      forksCount: 12,
-      openIssuesCount: 5,
-      language: 'Dart',
-      createdAt: DateTime.now().subtract(const Duration(days: 365)),
-      updatedAt: DateTime.now().subtract(const Duration(hours: 2)),
-      pushedAt: DateTime.now().subtract(const Duration(minutes: 30)),
-      size: 1024,
-      hasIssues: true,
-      hasProjects: true,
-      hasDownloads: true,
-      hasWiki: true,
-      hasPages: false,
-      hasDiscussions: false,
-      forks: 12,
-      openIssues: 5,
-      watchers: 8,
-      defaultBranch: 'main',
-      networkCount: 15,
-      subscribersCount: 3,
-    );
-  }
+
 
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Center(
+      return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            CircularProgressIndicator(
+            const CircularProgressIndicator(
               valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF3B82F6)),
             ),
-            SizedBox(height: 16),
+            const SizedBox(height: 16),
             Text(
-              'Loading GitHub Actions data...',
-              style: TextStyle(color: Color(0xFF94A3B8)),
+              widget.project != null 
+                ? 'Loading data for ${widget.project!.name}...'
+                : 'Loading GitHub Actions data...',
+              style: const TextStyle(color: Color(0xFF94A3B8)),
             ),
           ],
         ),
@@ -604,6 +763,14 @@ class _DashboardViewState extends State<DashboardView> {
               style: const TextStyle(color: Color(0xFF94A3B8)),
               textAlign: TextAlign.center,
             ),
+            if (widget.project != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Project: ${widget.project!.name} (${widget.project!.fullRepositoryName})',
+                style: const TextStyle(color: Color(0xFF64748B)),
+                textAlign: TextAlign.center,
+              ),
+            ],
             const SizedBox(height: 24),
             ElevatedButton.icon(
               onPressed: _loadData,
@@ -621,47 +788,6 @@ class _DashboardViewState extends State<DashboardView> {
 
     return Column(
       children: [
-        // Demo mode banner
-        if (_isDemoMode)
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-            decoration: const BoxDecoration(
-              color: Color(0xFF3B82F6),
-            ),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.info_outline,
-                  color: Colors.white,
-                  size: 20,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'Demo Mode: Showing sample data. Configure GitHub in Settings to see your real data.',
-                    style: GoogleFonts.inter(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-                TextButton(
-                  onPressed: () {
-                    // Navigate to settings
-                    // You can implement navigation here
-                  },
-                  child: Text(
-                    'Configure',
-                    style: GoogleFonts.inter(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
         // Main content
         Expanded(
           child: SingleChildScrollView(
@@ -677,7 +803,9 @@ class _DashboardViewState extends State<DashboardView> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Dashboard',
+                            widget.project != null 
+                              ? 'Dashboard - ${widget.project!.name}'
+                              : 'Dashboard',
                             style: GoogleFonts.inter(
                               fontSize: 32,
                               fontWeight: FontWeight.bold,
@@ -686,7 +814,7 @@ class _DashboardViewState extends State<DashboardView> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Monitor your GitHub Actions performance and analytics',
+                            'Monitor your ActDash performance and analytics',
                             style: GoogleFonts.inter(
                               fontSize: 16,
                               color: const Color(0xFF94A3B8),

@@ -1,5 +1,5 @@
 name: my_dashboard
-description: "GitHub Actions Analytics Dashboard"
+description: "ActDash Analytics Dashboard"
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -41,6 +41,8 @@ dependencies:
   google_fonts: ^6.1.0
   http: ^1.1.0
   shared_preferences: ^2.2.2
+  cloud_firestore: ^4.13.6
+  firebase_core: ^2.24.2
 
 
 

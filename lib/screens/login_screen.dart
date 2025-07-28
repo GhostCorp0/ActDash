@@ -63,9 +63,12 @@ class _LoginScreenState extends State<LoginScreen> {
         _passwordController.text,
       );
       
-      // Navigate to dashboard on successful login
+      // Navigate to dashboard on successful login and clear navigation stack
       if (mounted) {
-        Navigator.of(context).pushReplacementNamed('/dashboard');
+        Navigator.of(context).pushNamedAndRemoveUntil(
+          '/dashboard',
+          (route) => false, // Remove all previous routes
+        );
       }
     } catch (e) {
       setState(() {
@@ -111,7 +114,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     const SizedBox(height: 24),
                     Text(
-                      'GitHub Actions Dashboard',
+                      'ActDash Dashboard',
                       style: GoogleFonts.inter(
                         fontSize: 28,
                         fontWeight: FontWeight.bold,

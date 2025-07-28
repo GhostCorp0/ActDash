@@ -34,7 +34,7 @@ class AuthService {
     // Accept any email/password combination for now
     // You can add your specific Firebase user credentials here
     final user = User(
-      id: 'user-${DateTime.now().millisecondsSinceEpoch}',
+      id: 'user-${email.hashCode}', // Use email hash for consistent user ID
       email: email,
       displayName: email.split('@')[0], // Use email prefix as display name
     );
