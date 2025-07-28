@@ -6,9 +6,13 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 import 'dart:async';
 import 'services/github_api_service.dart';
+import 'services/auth_service.dart';
 import 'screens/settings_screen.dart';
+import 'screens/login_screen.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await AuthService.initializeAuth();
   runApp(const GitHubActionsDashboard());
 }
 
@@ -28,8 +32,79 @@ class GitHubActionsDashboard extends StatelessWidget {
         useMaterial3: true,
         textTheme: GoogleFonts.interTextTheme(Theme.of(context).textTheme),
       ),
-      home: const DashboardScreen(),
+      home: const AuthWrapper(),
+      routes: {
+        '/dashboard': (context) => const DashboardScreen(),
+        '/login': (context) => const LoginScreen(),
+      },
     );
+  }
+}
+
+class AuthWrapper extends StatefulWidget {
+  const AuthWrapper({super.key});
+
+  @override
+  State<AuthWrapper> createState() => _AuthWrapperState();
+}
+
+class _AuthWrapperState extends State<AuthWrapper> {
+  bool _isLoading = true;
+  User? _user;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkAuthState();
+  }
+
+  Future<void> _checkAuthState() async {
+    try {
+      // Check if user is already logged in
+      final user = AuthService.currentUser;
+      setState(() {
+        _user = user;
+        _isLoading = false;
+      });
+    } catch (e) {
+      print('Error checking auth state: $e');
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        backgroundColor: Color(0xFF0F172A),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(
+                color: Color(0xFF3B82F6),
+              ),
+              SizedBox(height: 16),
+              Text(
+                'Loading...',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (_user != null) {
+      return const DashboardScreen();
+    } else {
+      return const LoginScreen();
+    }
   }
 }
 
@@ -106,39 +181,68 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 // User info
                 Container(
                   padding: const EdgeInsets.all(16),
-                  child: Row(
+                  child: Column(
                     children: [
-                      CircleAvatar(
-                        radius: 20,
-                        backgroundColor: const Color(0xFF3B82F6),
-                        child: Text(
-                          'AS',
-                          style: GoogleFonts.inter(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Aman Singh',
+                      Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 20,
+                            backgroundColor: const Color(0xFF3B82F6),
+                            child: Text(
+                              AuthService.userEmail?.substring(0, 2).toUpperCase() ?? 'U',
                               style: GoogleFonts.inter(
                                 color: Colors.white,
-                                fontWeight: FontWeight.w600,
+                                fontWeight: FontWeight.bold,
                               ),
                             ),
-                            Text(
-                              'Developer',
-                              style: GoogleFonts.inter(
-                                color: const Color(0xFF94A3B8),
-                                fontSize: 12,
-                              ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  AuthService.userDisplayName ?? 'User',
+                                  style: GoogleFonts.inter(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                Text(
+                                  AuthService.userEmail ?? 'user@example.com',
+                                  style: GoogleFonts.inter(
+                                    color: const Color(0xFF94A3B8),
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
                             ),
-                          ],
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: () async {
+                            await AuthService.signOut();
+                          },
+                          icon: const Icon(Icons.logout, size: 16),
+                          label: Text(
+                            'Sign Out',
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFFEF4444),
+                            side: const BorderSide(color: Color(0xFFEF4444)),
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
                         ),
                       ),
                     ],
