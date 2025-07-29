@@ -447,17 +447,39 @@ class WorkflowRun {
   });
 
   factory WorkflowRun.fromJson(Map<String, dynamic> json) {
+    print('=== WORKFLOW RUN FROM JSON DEBUG ===');
+    print('Parsing workflow run with ID: ${json['id']}');
+    print('Raw JSON keys: ${json.keys.toList()}');
+    print('run_started_at raw value: ${json['run_started_at']}');
+    print('completed_at raw value: ${json['completed_at']}');
+    print('status: ${json['status']}');
+    print('conclusion: ${json['conclusion']}');
+    
     DateTime parseDateTime(String? dateString) {
       if (dateString == null) {
+        print('Date string is null, using current time');
         return DateTime.now();
       }
       try {
-        return DateTime.parse(dateString);
+        final parsed = DateTime.parse(dateString);
+        print('Successfully parsed date: $dateString -> $parsed');
+        return parsed;
       } catch (e) {
         print('Error parsing date: $dateString - $e');
         return DateTime.now();
       }
     }
+
+    final runStartedAt = json['run_started_at'] != null 
+        ? parseDateTime(json['run_started_at']) 
+        : null;
+    final completedAt = json['completed_at'] != null 
+        ? parseDateTime(json['completed_at']) 
+        : null;
+    
+    print('Parsed runStartedAt: $runStartedAt');
+    print('Parsed completedAt: $completedAt');
+    print('=== END WORKFLOW RUN FROM JSON DEBUG ===');
 
     return WorkflowRun(
       id: json['id'],
@@ -472,12 +494,8 @@ class WorkflowRun {
       workflowName: json['workflow_name'] ?? 'Unknown Workflow',
       createdAt: parseDateTime(json['created_at']),
       updatedAt: parseDateTime(json['updated_at']),
-      runStartedAt: json['run_started_at'] != null 
-          ? parseDateTime(json['run_started_at']) 
-          : null,
-      completedAt: json['completed_at'] != null 
-          ? parseDateTime(json['completed_at']) 
-          : null,
+      runStartedAt: runStartedAt,
+      completedAt: completedAt,
       actor: json['actor']?['login'] ?? 'unknown',
       triggeringActor: json['triggering_actor']?['login'] ?? 'unknown',
       runAttempt: json['run_attempt']?.toString() ?? '1',
@@ -489,19 +507,60 @@ class WorkflowRun {
   }
 
   Duration? get duration {
-    if (runStartedAt != null && completedAt != null) {
-      return completedAt!.difference(runStartedAt!);
+    print('=== DURATION CALCULATION DEBUG ===');
+    print('Workflow Run ID: $id');
+    print('Name: $name');
+    print('runStartedAt: $runStartedAt');
+    print('completedAt: $completedAt');
+    print('Status: $status');
+    print('Conclusion: $conclusion');
+    print('Updated At: $updatedAt');
+    
+    // For completed runs, use updatedAt as the completion time
+    DateTime? endTime = completedAt;
+    if (endTime == null && status == 'completed' && conclusion != null) {
+      print('Using updatedAt as completion time for completed run');
+      endTime = updatedAt;
     }
-    return null;
+    
+    if (runStartedAt != null && endTime != null) {
+      final duration = endTime.difference(runStartedAt!);
+      print('Calculated duration: ${duration.inSeconds} seconds');
+      print('Duration string: ${duration.inMinutes}m ${duration.inSeconds % 60}s');
+      print('=== END DURATION DEBUG ===');
+      return duration;
+    } else {
+      print('Missing timing data - cannot calculate duration');
+      print('runStartedAt is null: ${runStartedAt == null}');
+      print('endTime is null: ${endTime == null}');
+      print('=== END DURATION DEBUG ===');
+      return null;
+    }
   }
 
   String get durationString {
+    print('=== DURATION STRING DEBUG ===');
+    print('Workflow Run ID: $id');
+    
     final dur = duration;
-    if (dur == null) return 'Running...';
+    if (dur == null) {
+      if (status == 'completed') {
+        print('Duration is null but run is completed, returning "Unknown"');
+        print('=== END DURATION STRING DEBUG ===');
+        return 'Unknown';
+      } else {
+        print('Duration is null, returning "Running..."');
+        print('=== END DURATION STRING DEBUG ===');
+        return 'Running...';
+      }
+    }
     
     final minutes = dur.inMinutes;
     final seconds = dur.inSeconds % 60;
-    return '${minutes}m ${seconds}s';
+    final result = '${minutes}m ${seconds}s';
+    print('Duration string result: $result');
+    print('=== END DURATION STRING DEBUG ===');
+    return result;
   }
 
   String get timeAgo {

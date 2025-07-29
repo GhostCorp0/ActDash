@@ -864,6 +864,7 @@ class _DashboardViewState extends State<DashboardView> {
       final repositoryStats = futures[1] as RepositoryStats;
       
       print('=== LOADED WORKFLOW RUNS ===');
+      print('🔍 TEST LOG: Found ${workflowRuns.length} workflow runs');
       for (var run in workflowRuns) {
         print('Run ID: ${run.id}');
         print('  Name: ${run.name}');
@@ -1191,7 +1192,7 @@ class _DashboardViewState extends State<DashboardView> {
         : 0;
     
     final avgMinutes = avgDuration ~/ 60;
-    final avgSeconds = avgDuration % 60;
+    final avgSeconds = (avgDuration % 60).round();
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -1751,7 +1752,7 @@ class _DashboardViewState extends State<DashboardView> {
               ),
               const SizedBox(height: 4),
               Text(
-                '${run.durationString} (${run.runStartedAt != null && run.completedAt != null ? '${run.completedAt!.difference(run.runStartedAt!).inSeconds}s' : 'N/A'})',
+                run.durationString,
                 style: GoogleFonts.inter(
                   color: const Color(0xFF94A3B8),
                   fontSize: 12,
