@@ -1086,14 +1086,14 @@ class _DashboardViewState extends State<DashboardView> {
                   verticalInterval: 1,
                   getDrawingHorizontalLine: (value) {
                     return FlLine(
-                      color: const Color(0xFF334155),
-                      strokeWidth: 1,
+                      color: const Color(0xFF334155).withOpacity(0.3),
+                      strokeWidth: 0.5,
                     );
                   },
                   getDrawingVerticalLine: (value) {
                     return FlLine(
-                      color: const Color(0xFF334155),
-                      strokeWidth: 1,
+                      color: const Color(0xFF334155).withOpacity(0.2),
+                      strokeWidth: 0.5,
                     );
                   },
                 ),
@@ -1152,7 +1152,10 @@ class _DashboardViewState extends State<DashboardView> {
                 ),
                 borderData: FlBorderData(
                   show: true,
-                  border: Border.all(color: const Color(0xFF334155)),
+                  border: Border.all(
+                    color: const Color(0xFF334155).withOpacity(0.2),
+                    width: 0.5,
+                  ),
                 ),
                 minX: 0,
                 maxX: (sortedDates.length - 1).toDouble(),
@@ -1162,12 +1165,7 @@ class _DashboardViewState extends State<DashboardView> {
                   LineChartBarData(
                     spots: spots,
                     isCurved: true,
-                    gradient: LinearGradient(
-                      colors: [
-                        const Color(0xFF3B82F6),
-                        const Color(0xFF3B82F6).withOpacity(0.1),
-                      ],
-                    ),
+                    color: const Color(0xFF3B82F6),
                     barWidth: 3,
                     isStrokeCapRound: true,
                     dotData: FlDotData(
@@ -1183,12 +1181,7 @@ class _DashboardViewState extends State<DashboardView> {
                     ),
                     belowBarData: BarAreaData(
                       show: true,
-                      gradient: LinearGradient(
-                        colors: [
-                          const Color(0xFF3B82F6).withOpacity(0.3),
-                          const Color(0xFF3B82F6).withOpacity(0.0),
-                        ],
-                      ),
+                      color: const Color(0xFF3B82F6).withOpacity(0.2),
                     ),
                   ),
                 ],
