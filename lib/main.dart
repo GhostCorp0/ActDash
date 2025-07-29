@@ -137,11 +137,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
   List<Project> _projects = [];
   String? _selectedProjectId;
   bool _isLoadingProjects = true;
+  bool _isMobile = false;
 
   @override
   void initState() {
     super.initState();
     _loadProjects();
+    _checkScreenSize();
+  }
+
+  void _checkScreenSize() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final screenWidth = MediaQuery.of(context).size.width;
+      setState(() {
+        _isMobile = screenWidth < 768;
+      });
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final screenWidth = MediaQuery.of(context).size.width;
+    if (_isMobile != (screenWidth < 768)) {
+      setState(() {
+        _isMobile = screenWidth < 768;
+      });
+    }
   }
 
   Future<void> _loadProjects() async {
@@ -212,15 +234,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     print('=== END PROJECT LOADING DEBUG ===');
   }
 
-  // Manual refresh method for debugging
-  Future<void> _refreshProjects() async {
-    print('🔄 Manual project refresh triggered');
-    setState(() {
-      _isLoadingProjects = true;
-    });
-    await _loadProjects();
-  }
-
   void _onProjectChanged(String? projectId) {
     setState(() {
       _selectedProjectId = projectId;
@@ -236,312 +249,498 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF0F172A),
-      body: Row(
-        children: [
-          // Sidebar
-          Container(
-            width: 280,
-            decoration: const BoxDecoration(
-              color: Color(0xFF1E293B),
-              border: Border(
-                right: BorderSide(color: Color(0xFF334155), width: 1),
-              ),
+      body: _isMobile ? _buildMobileLayout() : _buildDesktopLayout(),
+    );
+  }
+
+  Widget _buildMobileLayout() {
+    return Column(
+      children: [
+        // Mobile Header with Project Selection
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: const BoxDecoration(
+            color: Color(0xFF1E293B),
+            border: Border(
+              bottom: BorderSide(color: Color(0xFF334155), width: 1),
             ),
-            child: Column(
-              children: [
-                // Header
-                Container(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            width: 40,
-                            height: 40,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF3B82F6),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: const Icon(
-                              Icons.rocket_launch,
-                              color: Colors.white,
-                              size: 20,
+          ),
+          child: Column(
+            children: [
+              // Logo and Title
+              Row(
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF3B82F6),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Icon(
+                      Icons.rocket_launch,
+                      color: Colors.white,
+                      size: 16,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'ActDash',
+                    style: GoogleFonts.inter(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              // Project Selection Dropdown
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0F172A),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFF334155)),
+                ),
+                child: _isLoadingProjects
+                    ? const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 12),
+                        child: Center(
+                          child: SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF3B82F6)),
                             ),
                           ),
-                          const SizedBox(width: 12),
-                          Text(
-                            'ActDash',
-                            style: GoogleFonts.inter(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      // Project Selection Dropdown
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF0F172A),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: const Color(0xFF334155)),
                         ),
-                        child: _isLoadingProjects
-                            ? const Padding(
-                                padding: EdgeInsets.symmetric(vertical: 12),
-                                child: Center(
-                                  child: SizedBox(
-                                    width: 16,
-                                    height: 16,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF3B82F6)),
+                      )
+                    : DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: _selectedProjectId,
+                          hint: Text(
+                            _projects.isEmpty 
+                              ? 'No Projects Found' 
+                              : 'Select Project (${_projects.length})',
+                            style: GoogleFonts.inter(
+                              color: const Color(0xFF94A3B8),
+                              fontSize: 14,
+                            ),
+                          ),
+                          icon: const Icon(
+                            Icons.keyboard_arrow_down,
+                            color: Color(0xFF94A3B8),
+                            size: 20,
+                          ),
+                          dropdownColor: const Color(0xFF1E293B),
+                          style: GoogleFonts.inter(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          underline: Container(),
+                          isExpanded: true,
+                          menuMaxHeight: 200,
+                          items: [
+                            ..._projects.map((Project project) {
+                              return DropdownMenuItem<String>(
+                                value: project.id,
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 8,
+                                      height: 8,
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF10B981),
+                                        shape: BoxShape.circle,
+                                      ),
                                     ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        project.name,
+                                        style: GoogleFonts.inter(
+                                          color: Colors.white,
+                                          fontSize: 14,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }).toList(),
+                            if (_projects.isNotEmpty)
+                              const DropdownMenuItem<String>(enabled: false, child: Divider(color: Color(0xFF334155))),
+                            DropdownMenuItem<String>(
+                              value: null,
+                              child: Row(
+                                children: [
+                                  const Icon(
+                                    Icons.add,
+                                    color: Color(0xFF3B82F6),
+                                    size: 16,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Add Project',
+                                    style: GoogleFonts.inter(
+                                      color: const Color(0xFF3B82F6),
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                          onChanged: (String? projectId) {
+                            if (projectId == null) {
+                              Navigator.of(context).pushNamed('/add-project');
+                            } else {
+                              _onProjectChanged(projectId);
+                            }
+                          },
+                        ),
+                      ),
+              ),
+            ],
+          ),
+        ),
+        // Mobile Navigation Tabs
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          decoration: const BoxDecoration(
+            color: Color(0xFF1E293B),
+            border: Border(
+              bottom: BorderSide(color: Color(0xFF334155), width: 1),
+            ),
+          ),
+          child: Row(
+            children: [
+              _buildMobileNavItem(Icons.dashboard, 'Dashboard', 0),
+              const SizedBox(width: 8),
+              _buildMobileNavItem(Icons.analytics, 'Analytics', 1),
+              const SizedBox(width: 8),
+              _buildMobileNavItem(Icons.history, 'History', 2),
+            ],
+          ),
+        ),
+        // Main Content
+        Expanded(
+          child: _buildMainContent(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMobileNavItem(IconData icon, String title, int index) {
+    final isSelected = _selectedIndex == index;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () {
+          setState(() {
+            _selectedIndex = index;
+          });
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: isSelected ? const Color(0xFF3B82F6) : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                color: isSelected ? Colors.white : const Color(0xFF94A3B8),
+                size: 20,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                title,
+                style: GoogleFonts.inter(
+                  color: isSelected ? Colors.white : const Color(0xFF94A3B8),
+                  fontSize: 12,
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDesktopLayout() {
+    return Row(
+      children: [
+        // Sidebar
+        Container(
+          width: 280,
+          decoration: const BoxDecoration(
+            color: Color(0xFF1E293B),
+            border: Border(
+              right: BorderSide(color: Color(0xFF334155), width: 1),
+            ),
+          ),
+          child: Column(
+            children: [
+              // Header
+              Container(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF3B82F6),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(
+                            Icons.rocket_launch,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          'ActDash',
+                          style: GoogleFonts.inter(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    // Project Selection Dropdown
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0F172A),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFF334155)),
+                      ),
+                      child: _isLoadingProjects
+                          ? const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 12),
+                              child: Center(
+                                child: SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF3B82F6)),
                                   ),
                                 ),
-                              )
-                            : DropdownButtonHideUnderline(
-                                child: DropdownButton<String>(
-                                  value: _selectedProjectId,
-                                  hint: Text(
-                                    _projects.isEmpty 
-                                      ? 'No Projects Found - Click "Add Project" or check Firestore' 
-                                      : 'Select Project (${_projects.length} available)',
-                                    style: GoogleFonts.inter(
-                                      color: const Color(0xFF94A3B8),
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                  icon: const Icon(
-                                    Icons.keyboard_arrow_down,
-                                    color: const Color(0xFF94A3B8),
-                                    size: 20,
-                                  ),
-                                  dropdownColor: const Color(0xFF1E293B),
+                              ),
+                            )
+                          : DropdownButtonHideUnderline(
+                              child: DropdownButton<String>(
+                                value: _selectedProjectId,
+                                hint: Text(
+                                  _projects.isEmpty 
+                                    ? 'No Projects Found - Click "Add Project" or check Firestore' 
+                                    : 'Select Project (${_projects.length} available)',
                                   style: GoogleFonts.inter(
-                                    color: Colors.white,
+                                    color: const Color(0xFF94A3B8),
                                     fontSize: 14,
-                                    fontWeight: FontWeight.w500,
                                   ),
-                                  underline: Container(), // Remove default underline
-                                  isExpanded: true, // Make dropdown expand to fill container
-                                  menuMaxHeight: 300, // Limit dropdown height
-                                  items: [
-                                    ..._projects.map((Project project) {
-                                      return DropdownMenuItem<String>(
-                                        value: project.id,
-                                        child: Row(
-                                          children: [
-                                            const Icon(
-                                              Icons.folder,
-                                              color: Color(0xFF3B82F6),
-                                              size: 16,
-                                            ),
-                                            const SizedBox(width: 8),
-                                            Expanded(
-                                              child: Column(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  Text(
-                                                    project.name,
-                                                    style: GoogleFonts.inter(
-                                                      color: Colors.white,
-                                                      fontSize: 14,
-                                                      fontWeight: FontWeight.w500,
-                                                    ),
-                                                  ),
-                                                  Text(
-                                                    project.fullRepositoryName,
-                                                    style: GoogleFonts.inter(
-                                                      color: const Color(0xFF94A3B8),
-                                                      fontSize: 12,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      );
-                                    }).toList(),
-                                    if (_projects.isNotEmpty)
-                                      const DropdownMenuItem<String>(
-                                        enabled: false,
-                                        child: Divider(color: Color(0xFF334155)),
-                                      ),
-                                    DropdownMenuItem<String>(
-                                      value: null,
+                                ),
+                                icon: const Icon(
+                                  Icons.keyboard_arrow_down,
+                                  color: const Color(0xFF94A3B8),
+                                  size: 20,
+                                ),
+                                dropdownColor: const Color(0xFF1E293B),
+                                style: GoogleFonts.inter(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                underline: Container(), // Remove default underline
+                                isExpanded: true, // Make dropdown expand to fill container
+                                menuMaxHeight: 300, // Limit dropdown height
+                                items: [
+                                  ..._projects.map((Project project) {
+                                    return DropdownMenuItem<String>(
+                                      value: project.id,
                                       child: Row(
                                         children: [
                                           const Icon(
-                                            Icons.add,
+                                            Icons.folder,
                                             color: Color(0xFF3B82F6),
                                             size: 16,
                                           ),
                                           const SizedBox(width: 8),
-                                          Text(
-                                            _projects.isEmpty ? 'Add Project' : 'Manage Projects',
-                                            style: GoogleFonts.inter(
-                                              color: const Color(0xFF3B82F6),
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.w500,
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Text(
+                                                  project.name,
+                                                  style: GoogleFonts.inter(
+                                                    color: Colors.white,
+                                                    fontSize: 14,
+                                                    fontWeight: FontWeight.w500,
+                                                  ),
+                                                ),
+                                                Text(
+                                                  project.fullRepositoryName,
+                                                  style: GoogleFonts.inter(
+                                                    color: const Color(0xFF94A3B8),
+                                                    fontSize: 12,
+                                                  ),
+                                                ),
+                                              ],
                                             ),
                                           ),
                                         ],
                                       ),
+                                    );
+                                  }).toList(),
+                                  if (_projects.isNotEmpty)
+                                    const DropdownMenuItem<String>(
+                                      enabled: false,
+                                      child: Divider(color: Color(0xFF334155)),
                                     ),
-                                  ],
-                                  onChanged: (String? projectId) {
-                                    if (projectId == null) {
-                                      // Navigate to add project screen
-                                      Navigator.of(context).pushNamed('/add-project');
-                                    } else {
-                                      _onProjectChanged(projectId);
-                                    }
-                                  },
-                                ),
-                              ),
-                      ),
-                      // Debug button to check Firestore
-                      Container(
-                        margin: const EdgeInsets.only(top: 8),
-                        child: SizedBox(
-                          width: double.infinity,
-                          child: OutlinedButton.icon(
-                            onPressed: () {
-                              print('=== MANUAL DEBUG CHECK ===');
-                              print('Current user ID: ${AuthService.userId}');
-                              print('Current projects count: ${_projects.length}');
-                              if (_projects.isNotEmpty) {
-                                final selectedProject = _projects.firstWhere(
-                                  (p) => p.id == _selectedProjectId,
-                                  orElse: () => _projects.first,
-                                );
-                                print('Selected project: ${selectedProject.name}');
-                              } else {
-                                print('⚠️  No projects found in current state');
-                              }
-                              print('Is loading projects: $_isLoadingProjects');
-                              _refreshProjects(); // Use the new refresh method
-                            },
-                            icon: const Icon(Icons.bug_report, size: 16),
-                            label: Text(
-                              'Debug: Check Projects (${_projects.length})',
-                              style: GoogleFonts.inter(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: const Color(0xFFEF4444),
-                              side: const BorderSide(color: Color(0xFFEF4444)),
-                              padding: const EdgeInsets.symmetric(vertical: 8),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const Divider(color: Color(0xFF334155)),
-                // Navigation
-                Expanded(
-                  child: ListView(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    children: [
-                      _buildNavItem(Icons.dashboard, 'Dashboard', 0),
-                      _buildNavItem(Icons.analytics, 'Analytics', 1),
-                      _buildNavItem(Icons.history, 'Build History', 2),
-                    ],
-                  ),
-                ),
-                // User info
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    children: [
-                      Row(
-                        children: [
-                          CircleAvatar(
-                            radius: 20,
-                            backgroundColor: const Color(0xFF3B82F6),
-                            child: Text(
-                              AuthService.userEmail?.substring(0, 2).toUpperCase() ?? 'U',
-                              style: GoogleFonts.inter(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  AuthService.userDisplayName ?? 'User',
-                                  style: GoogleFonts.inter(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w600,
+                                  DropdownMenuItem<String>(
+                                    value: null,
+                                    child: Row(
+                                      children: [
+                                        const Icon(
+                                          Icons.add,
+                                          color: Color(0xFF3B82F6),
+                                          size: 16,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          _projects.isEmpty ? 'Add Project' : 'Manage Projects',
+                                          style: GoogleFonts.inter(
+                                            color: const Color(0xFF3B82F6),
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                ),
-                                Text(
-                                  AuthService.userEmail ?? 'user@example.com',
-                                  style: GoogleFonts.inter(
-                                    color: const Color(0xFF94A3B8),
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ],
+                                ],
+                                onChanged: (String? projectId) {
+                                  if (projectId == null) {
+                                    // Navigate to add project screen
+                                    Navigator.of(context).pushNamed('/add-project');
+                                  } else {
+                                    _onProjectChanged(projectId);
+                                  }
+                                },
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton.icon(
-                          onPressed: () async {
-                            await AuthService.signOut();
-                          },
-                          icon: const Icon(Icons.logout, size: 16),
-                          label: Text(
-                            'Sign Out',
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(color: Color(0xFF334155)),
+              // Navigation
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  children: [
+                    _buildNavItem(Icons.dashboard, 'Dashboard', 0),
+                    _buildNavItem(Icons.analytics, 'Analytics', 1),
+                    _buildNavItem(Icons.history, 'Build History', 2),
+                  ],
+                ),
+              ),
+              // User info
+              Container(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 20,
+                          backgroundColor: const Color(0xFF3B82F6),
+                          child: Text(
+                            AuthService.userEmail?.substring(0, 2).toUpperCase() ?? 'U',
                             style: GoogleFonts.inter(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: const Color(0xFFEF4444),
-                            side: const BorderSide(color: Color(0xFFEF4444)),
-                            padding: const EdgeInsets.symmetric(vertical: 8),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
                         ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                AuthService.userDisplayName ?? 'User',
+                                style: GoogleFonts.inter(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              Text(
+                                AuthService.userEmail ?? 'user@example.com',
+                                style: GoogleFonts.inter(
+                                  color: const Color(0xFF94A3B8),
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () async {
+                          await AuthService.signOut();
+                        },
+                        icon: const Icon(Icons.logout, size: 16),
+                        label: Text(
+                          'Sign Out',
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFFEF4444),
+                          side: const BorderSide(color: Color(0xFFEF4444)),
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-          // Main content
-          Expanded(
-            child: _buildMainContent(),
-          ),
-        ],
-      ),
+        ),
+        // Main content
+        Expanded(
+          child: _buildMainContent(),
+        ),
+      ],
     );
   }
 
@@ -790,109 +989,189 @@ class _DashboardViewState extends State<DashboardView> {
       children: [
         // Main content
         Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Header
-                Row(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final isMobile = constraints.maxWidth < 768;
+              return SingleChildScrollView(
+                padding: EdgeInsets.all(isMobile ? 16 : 24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            widget.project != null 
-                              ? 'Dashboard - ${widget.project!.name}'
-                              : 'Dashboard',
-                            style: GoogleFonts.inter(
-                              fontSize: 32,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Monitor your ActDash performance and analytics',
-                            style: GoogleFonts.inter(
-                              fontSize: 16,
-                              color: const Color(0xFF94A3B8),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Row(
-                      children: [
-                        // Manual refresh button
-                        Container(
-                          margin: const EdgeInsets.only(right: 12),
-                          child: IconButton(
-                            onPressed: () {
-                              print('🔄 Manual refresh triggered');
-                              _loadData();
-                            },
-                            icon: const Icon(
-                              Icons.refresh,
-                              color: Color(0xFF3B82F6),
-                              size: 20,
-                            ),
-                            tooltip: 'Refresh data',
-                          ),
-                        ),
-                        // Status indicator
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF10B981),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
+                    // Header
+                    isMobile
+                        ? Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Icon(Icons.circle, color: Colors.white, size: 8),
-                              const SizedBox(width: 8),
                               Text(
-                                'All Systems Operational',
+                                widget.project != null 
+                                  ? 'Dashboard - ${widget.project!.name}'
+                                  : 'Dashboard',
                                 style: GoogleFonts.inter(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
                                   color: Colors.white,
-                                  fontWeight: FontWeight.w600,
                                 ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Monitor your ActDash performance and analytics',
+                                style: GoogleFonts.inter(
+                                  fontSize: 14,
+                                  color: const Color(0xFF94A3B8),
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              Row(
+                                children: [
+                                  // Manual refresh button
+                                  IconButton(
+                                    onPressed: () {
+                                      print('🔄 Manual refresh triggered');
+                                      _loadData();
+                                    },
+                                    icon: const Icon(
+                                      Icons.refresh,
+                                      color: Color(0xFF3B82F6),
+                                      size: 20,
+                                    ),
+                                    tooltip: 'Refresh data',
+                                  ),
+                                  // Status indicator
+                                  Expanded(
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF10B981),
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Icon(Icons.circle, color: Colors.white, size: 6),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            'All Systems Operational',
+                                            style: GoogleFonts.inter(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          )
+                        : Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      widget.project != null 
+                                        ? 'Dashboard - ${widget.project!.name}'
+                                        : 'Dashboard',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 32,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      'Monitor your ActDash performance and analytics',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 16,
+                                        color: const Color(0xFF94A3B8),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Row(
+                                children: [
+                                  // Manual refresh button
+                                  Container(
+                                    margin: const EdgeInsets.only(right: 12),
+                                    child: IconButton(
+                                      onPressed: () {
+                                        print('🔄 Manual refresh triggered');
+                                        _loadData();
+                                      },
+                                      icon: const Icon(
+                                        Icons.refresh,
+                                        color: Color(0xFF3B82F6),
+                                        size: 20,
+                                      ),
+                                      tooltip: 'Refresh data',
+                                    ),
+                                  ),
+                                  // Status indicator
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF10B981),
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(Icons.circle, color: Colors.white, size: 8),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          'All Systems Operational',
+                                          style: GoogleFonts.inter(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
-                        ),
-                      ],
-                    ),
+                    const SizedBox(height: 32),
+                    
+                    // Stats Cards
+                    _buildStatsCards(),
+                    const SizedBox(height: 32),
+                    
+                    // Charts Row
+                    isMobile
+                        ? Column(
+                            children: [
+                              _buildBuildTrendsChart(),
+                              const SizedBox(height: 24),
+                              _buildSuccessRateChart(),
+                            ],
+                          )
+                        : Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                flex: 2,
+                                child: _buildBuildTrendsChart(),
+                              ),
+                              const SizedBox(width: 24),
+                              Expanded(
+                                child: _buildSuccessRateChart(),
+                              ),
+                            ],
+                          ),
+                    const SizedBox(height: 32),
+                    
+                    // Recent Builds
+                    _buildRecentBuilds(),
                   ],
                 ),
-                const SizedBox(height: 32),
-                
-                // Stats Cards
-                _buildStatsCards(),
-                const SizedBox(height: 32),
-                
-                // Charts Row
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      flex: 2,
-                      child: _buildBuildTrendsChart(),
-                    ),
-                    const SizedBox(width: 24),
-                    Expanded(
-                      child: _buildSuccessRateChart(),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 32),
-                
-                // Recent Builds
-                _buildRecentBuilds(),
-              ],
-            ),
+              );
+            },
           ),
         ),
       ],
@@ -914,16 +1193,33 @@ class _DashboardViewState extends State<DashboardView> {
     final avgMinutes = avgDuration ~/ 60;
     final avgSeconds = avgDuration % 60;
 
-    return Row(
-      children: [
-        Expanded(child: _buildStatCard('Total Builds', totalBuilds.toString(), Icons.build, Colors.blue)),
-        const SizedBox(width: 16),
-        Expanded(child: _buildStatCard('Success Rate', '${successRate.toStringAsFixed(1)}%', Icons.check_circle, Colors.green)),
-        const SizedBox(width: 16),
-        Expanded(child: _buildStatCard('Avg Duration', '${avgMinutes}m ${avgSeconds}s', Icons.timer, Colors.orange)),
-        const SizedBox(width: 16),
-        Expanded(child: _buildStatCard('Failed Builds', failedBuilds.toString(), Icons.error, Colors.red)),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 768;
+        return isMobile
+            ? Column(
+                children: [
+                  _buildStatCard('Total Builds', totalBuilds.toString(), Icons.build, Colors.blue),
+                  const SizedBox(height: 16),
+                  _buildStatCard('Success Rate', '${successRate.toStringAsFixed(1)}%', Icons.check_circle, Colors.green),
+                  const SizedBox(height: 16),
+                  _buildStatCard('Avg Duration', '${avgMinutes}m ${avgSeconds}s', Icons.timer, Colors.orange),
+                  const SizedBox(height: 16),
+                  _buildStatCard('Failed Builds', failedBuilds.toString(), Icons.error, Colors.red),
+                ],
+              )
+            : Row(
+                children: [
+                  Expanded(child: _buildStatCard('Total Builds', totalBuilds.toString(), Icons.build, Colors.blue)),
+                  const SizedBox(width: 16),
+                  Expanded(child: _buildStatCard('Success Rate', '${successRate.toStringAsFixed(1)}%', Icons.check_circle, Colors.green)),
+                  const SizedBox(width: 16),
+                  Expanded(child: _buildStatCard('Avg Duration', '${avgMinutes}m ${avgSeconds}s', Icons.timer, Colors.orange)),
+                  const SizedBox(width: 16),
+                  Expanded(child: _buildStatCard('Failed Builds', failedBuilds.toString(), Icons.error, Colors.red)),
+                ],
+              );
+      },
     );
   }
 
