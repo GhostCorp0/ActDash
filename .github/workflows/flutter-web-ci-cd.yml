@@ -1,0 +1,166 @@
+name: Flutter Web CI/CD
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  build-and-deploy:
+    name: Build & Deploy Flutter Web
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'
+          channel: 'stable'
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Build web app
+        run: flutter build web --release
+
+      - name: Deploy to Firebase Hosting
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        if: github.ref == 'refs/heads/master'
+        with:
+          repoToken: '${{ secrets.GITHUB_TOKEN }}'
+          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
+          projectId: '${{ secrets.FIREBASE_PROJECT_ID }}'
+          channelId: live
+
+      # --- Build Success Notifications ---
+      
+      - name: Send email on build success
+        if: success()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: amansingh08088@gmail.com
+          password: ${{ secrets.GMAIL_APP_PASSWORD }}
+          subject: "✅ Build Succeeded: ${{ github.workflow }} #${{ github.run_number }}"
+          to: amansingh08088@gmail.com
+          from: GitHub Actions <amansingh08088@gmail.com>
+          body: |
+            Hi Aman,
+            
+            Your Flutter web app build has completed successfully!
+            
+            Build Details:
+            - Repository: ${{ github.repository }}
+            - Branch: ${{ github.ref_name }}
+            - Commit: ${{ github.sha }}
+            - Triggered by: ${{ github.actor }}
+            - Workflow: ${{ github.workflow }} #${{ github.run_number }}
+            
+            View the full details here: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            
+            Best regards,
+            My Dashboard CI/CD Bot
+
+      - name: Send Discord notification on build success
+        if: success()
+        uses: Ilshidur/action-discord@0.3.2
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        with:
+          args: |
+            ✅ **Build Succeeded**: ${{ github.workflow }} [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            **Repo**: `${{ github.repository }}`
+            **Branch**: `${{ github.ref_name }}`
+            **Commit**: `${{ github.sha }}`
+            **By**: `${{ github.actor }}`
+
+      # --- Deployment Success Notifications ---
+      
+      - name: Send email on deployment success
+        if: success() && github.ref == 'refs/heads/master'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: amansingh08088@gmail.com
+          password: ${{ secrets.GMAIL_APP_PASSWORD }}
+          subject: "🚀 Deployment Successful: ${{ github.workflow }} #${{ github.run_number }}"
+          to: amansingh08088@gmail.com
+          from: GitHub Actions <amansingh08088@gmail.com>
+          body: |
+            Hi Aman,
+            
+            Your Flutter web app has been successfully deployed to GitHub Pages!
+            
+            Deployment Details:
+            - Repository: ${{ github.repository }}
+            - Branch: ${{ github.ref_name }}
+            - Commit: ${{ github.sha }}
+            - Triggered by: ${{ github.actor }}
+            - Workflow: ${{ github.workflow }} #${{ github.run_number }}
+            - Live URL: https://${{ secrets.FIREBASE_PROJECT_ID }}.web.app/
+            
+            View the full details here: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            
+            Best regards,
+            My Dashboard CI/CD Bot
+
+      - name: Send Discord notification on deployment success
+        if: success() && github.ref == 'refs/heads/master'
+        uses: Ilshidur/action-discord@0.3.2
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        with:
+          args: |
+            🚀 **Deployment Successful**: ${{ github.workflow }} [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            **Repo**: `${{ github.repository }}`
+            **Branch**: `${{ github.ref_name }}`
+            **Commit**: `${{ github.sha }}`
+            **By**: `${{ github.actor }}`
+            **Live URL**: https://${{ secrets.FIREBASE_PROJECT_ID }}.web.app/
+
+      # --- Failure Notifications ---
+      
+      - name: Send email on failure
+        if: failure()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: amansingh08088@gmail.com
+          password: ${{ secrets.GMAIL_APP_PASSWORD }}
+          subject: "❌ Build/Deploy Failed: ${{ github.workflow }} #${{ github.run_number }}"
+          to: amansingh08088@gmail.com
+          from: GitHub Actions <amansingh08088@gmail.com>
+          body: |
+            Hi Aman,
+            
+            Your Flutter web app build/deployment has failed.
+            
+            Build Details:
+            - Repository: ${{ github.repository }}
+            - Branch: ${{ github.ref_name }}
+            - Commit: ${{ github.sha }}
+            - Triggered by: ${{ github.actor }}
+            - Workflow: ${{ github.workflow }} #${{ github.run_number }}
+            
+            Please review the logs and resolve any issues: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            
+            Best regards,
+            My Dashboard CI/CD Bot
+
+      - name: Send Discord notification on failure
+        if: failure()
+        uses: Ilshidur/action-discord@0.3.2
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        with:
+          args: |
+            ❌ **Build/Deploy Failed**: ${{ github.workflow }} [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            **Repo**: `${{ github.repository }}`
+            **Branch**: `${{ github.ref_name }}`
+            **Commit**: `${{ github.sha }}`
+            **By**: `${{ github.actor }}` 
