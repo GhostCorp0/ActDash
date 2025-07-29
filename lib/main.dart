@@ -1638,7 +1638,12 @@ class _DashboardViewState extends State<DashboardView> {
               const Spacer(),
               TextButton.icon(
                 onPressed: () {
-                  // Navigate to build history
+                  // Navigate to build history page
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const BuildHistoryPage(),
+                    ),
+                  );
                 },
                 icon: const Icon(Icons.history, color: Color(0xFF3B82F6)),
                 label: Text(
@@ -1787,10 +1792,393 @@ class BuildHistoryView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
-      child: Text(
-        'Build History View - Coming Soon',
-        style: TextStyle(color: Colors.white, fontSize: 24),
+    return const BuildHistoryPage();
+  }
+}
+
+class BuildHistoryPage extends StatefulWidget {
+  const BuildHistoryPage({super.key});
+
+  @override
+  State<BuildHistoryPage> createState() => _BuildHistoryPageState();
+}
+
+class _BuildHistoryPageState extends State<BuildHistoryPage> {
+  List<WorkflowRun> _allWorkflowRuns = [];
+  bool _isLoading = true;
+  String? _error;
+  String _selectedStatus = 'all';
+  String _selectedBranch = 'all';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAllWorkflowRuns();
+  }
+
+  Future<void> _loadAllWorkflowRuns() async {
+    try {
+      setState(() {
+        _isLoading = true;
+        _error = null;
+      });
+
+      // Load all workflow runs (not just recent ones)
+      final allRuns = await GitHubApiService.getWorkflowRuns();
+      
+      setState(() {
+        _allWorkflowRuns = allRuns;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _error = 'Error loading build history: $e';
+      });
+    }
+  }
+
+  List<WorkflowRun> get _filteredRuns {
+    return _allWorkflowRuns.where((run) {
+      bool statusMatch = _selectedStatus == 'all' || 
+                        (_selectedStatus == 'success' && run.conclusion == 'success') ||
+                        (_selectedStatus == 'failure' && run.conclusion == 'failure') ||
+                        (_selectedStatus == 'cancelled' && run.conclusion == 'cancelled') ||
+                        (_selectedStatus == 'running' && run.status == 'in_progress');
+      
+      bool branchMatch = _selectedBranch == 'all' || run.headBranch == _selectedBranch;
+      
+      return statusMatch && branchMatch;
+    }).toList();
+  }
+
+  List<String> get _availableBranches {
+    final branches = _allWorkflowRuns.map((run) => run.headBranch).toSet().toList();
+    branches.sort();
+    return ['all', ...branches];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0F172A),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF1E293B),
+        elevation: 0,
+        title: Text(
+          'Build History',
+          style: GoogleFonts.inter(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh, color: Colors.white),
+            onPressed: _loadAllWorkflowRuns,
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          // Filters
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: const BoxDecoration(
+              color: Color(0xFF1E293B),
+              border: Border(
+                bottom: BorderSide(color: Color(0xFF334155), width: 1),
+              ),
+            ),
+            child: Row(
+              children: [
+                // Status Filter
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0F172A),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFF334155)),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: _selectedStatus,
+                        icon: const Icon(Icons.keyboard_arrow_down, color: Color(0xFF94A3B8)),
+                        dropdownColor: const Color(0xFF1E293B),
+                        style: GoogleFonts.inter(color: Colors.white),
+                        items: [
+                          DropdownMenuItem(value: 'all', child: Text('All Status')),
+                          DropdownMenuItem(value: 'success', child: Text('Success')),
+                          DropdownMenuItem(value: 'failure', child: Text('Failed')),
+                          DropdownMenuItem(value: 'cancelled', child: Text('Cancelled')),
+                          DropdownMenuItem(value: 'running', child: Text('Running')),
+                        ],
+                        onChanged: (value) {
+                          setState(() {
+                            _selectedStatus = value!;
+                          });
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // Branch Filter
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0F172A),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFF334155)),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: _selectedBranch,
+                        icon: const Icon(Icons.keyboard_arrow_down, color: Color(0xFF94A3B8)),
+                        dropdownColor: const Color(0xFF1E293B),
+                        style: GoogleFonts.inter(color: Colors.white),
+                        items: _availableBranches.map((branch) {
+                          return DropdownMenuItem(
+                            value: branch,
+                            child: Text(branch == 'all' ? 'All Branches' : branch),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          setState(() {
+                            _selectedBranch = value!;
+                          });
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Build List
+          Expanded(
+            child: _isLoading
+                ? const Center(
+                    child: CircularProgressIndicator(
+                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF3B82F6)),
+                    ),
+                  )
+                : _error != null
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(
+                              Icons.error_outline,
+                              color: Color(0xFFEF4444),
+                              size: 64,
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              _error!,
+                              style: const TextStyle(color: Color(0xFF94A3B8)),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 24),
+                            ElevatedButton.icon(
+                              onPressed: _loadAllWorkflowRuns,
+                              icon: const Icon(Icons.refresh),
+                              label: const Text('Retry'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF3B82F6),
+                                foregroundColor: Colors.white,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : _filteredRuns.isEmpty
+                        ? const Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.history,
+                                  color: Color(0xFF94A3B8),
+                                  size: 64,
+                                ),
+                                SizedBox(height: 16),
+                                Text(
+                                  'No builds found',
+                                  style: TextStyle(color: Color(0xFF94A3B8), fontSize: 18),
+                                ),
+                                SizedBox(height: 8),
+                                Text(
+                                  'Try adjusting your filters or check your repository',
+                                  style: TextStyle(color: Color(0xFF64748B), fontSize: 14),
+                                ),
+                              ],
+                            ),
+                          )
+                        : ListView.builder(
+                            padding: const EdgeInsets.all(16),
+                            itemCount: _filteredRuns.length,
+                            itemBuilder: (context, index) {
+                              final run = _filteredRuns[index];
+                              return _buildDetailedBuildItem(run);
+                            },
+                          ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailedBuildItem(WorkflowRun run) {
+    Color statusColor;
+    String statusText;
+    IconData statusIcon;
+    
+    switch (run.conclusion) {
+      case 'success':
+        statusColor = Colors.green;
+        statusText = 'Success';
+        statusIcon = Icons.check_circle;
+        break;
+      case 'failure':
+        statusColor = Colors.red;
+        statusText = 'Failed';
+        statusIcon = Icons.error;
+        break;
+      case 'cancelled':
+        statusColor = Colors.orange;
+        statusText = 'Cancelled';
+        statusIcon = Icons.cancel;
+        break;
+      default:
+        statusColor = const Color(0xFF94A3B8);
+        statusText = 'Running';
+        statusIcon = Icons.schedule;
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E293B),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF334155)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header with status and time
+          Row(
+            children: [
+              Icon(statusIcon, color: statusColor, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                run.name,
+                style: GoogleFonts.inter(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 16,
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: statusColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: statusColor.withOpacity(0.3)),
+                ),
+                child: Text(
+                  statusText,
+                  style: GoogleFonts.inter(
+                    color: statusColor,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // Commit and branch info
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF3B82F6).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: const Color(0xFF3B82F6).withOpacity(0.3)),
+                ),
+                child: Text(
+                  run.headBranch,
+                  style: GoogleFonts.inter(
+                    color: const Color(0xFF3B82F6),
+                    fontWeight: FontWeight.w500,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  run.headCommit,
+                  style: GoogleFonts.inter(
+                    color: const Color(0xFF94A3B8),
+                    fontSize: 12,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // Duration and time ago
+          Row(
+            children: [
+              Icon(Icons.timer, color: const Color(0xFF94A3B8), size: 16),
+              const SizedBox(width: 4),
+              Text(
+                run.durationString,
+                style: GoogleFonts.inter(
+                  color: const Color(0xFF94A3B8),
+                  fontSize: 12,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                run.timeAgo,
+                style: GoogleFonts.inter(
+                  color: const Color(0xFF94A3B8),
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+          if (run.runStartedAt != null) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(Icons.schedule, color: const Color(0xFF94A3B8), size: 16),
+                const SizedBox(width: 4),
+                Text(
+                  'Started: ${DateFormat('MMM dd, yyyy HH:mm').format(run.runStartedAt!)}',
+                  style: GoogleFonts.inter(
+                    color: const Color(0xFF94A3B8),
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
       ),
     );
   }
