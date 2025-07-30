@@ -16,6 +16,14 @@ class User {
 class AuthService {
   static User? _currentUser;
   static final StreamController<User?> _authStateController = StreamController<User?>.broadcast();
+  
+  // Debug method to check stream status
+  static void debugStreamStatus() {
+    print('🔍 Stream debug:');
+    print('  - Has listener: ${_authStateController.hasListener}');
+    print('  - Is closed: ${_authStateController.isClosed}');
+    print('  - Current user: ${_currentUser?.email ?? 'null'}');
+  }
 
   // Get current user
   static User? get currentUser => _currentUser;
@@ -24,7 +32,10 @@ class AuthService {
   static bool get isLoggedIn => _currentUser != null;
 
   // Stream of auth state changes
-  static Stream<User?> get authStateChanges => _authStateController.stream;
+  static Stream<User?> get authStateChanges {
+    print('📡 Getting auth state stream, has listener: ${_authStateController.hasListener}');
+    return _authStateController.stream;
+  }
 
   // Sign in with email and password
   static Future<User> signInWithEmailAndPassword(
@@ -53,14 +64,24 @@ class AuthService {
 
   // Sign out
   static Future<void> signOut() async {
+    print('🚪 Signing out user: ${_currentUser?.email}');
+    debugStreamStatus();
+    
     _currentUser = null;
+    print('✅ _currentUser set to null');
+    
+    print('📡 Emitting null to auth state stream...');
     _authStateController.add(null);
+    print('✅ Null emitted to auth state stream');
+    
+    debugStreamStatus();
     
     // Clear shared preferences
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('user_email');
     await prefs.remove('user_id');
     await prefs.remove('user_display_name');
+    print('🗑️  Shared preferences cleared');
   }
 
   // Get user email

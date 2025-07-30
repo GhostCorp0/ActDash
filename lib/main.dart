@@ -78,11 +78,21 @@ class _AuthWrapperState extends State<AuthWrapper> {
   }
 
   void _listenToAuthChanges() {
+    print('🎧 Setting up auth state listener...');
     _authSubscription = AuthService.authStateChanges.listen((user) {
-      setState(() {
-        _user = user;
-        _isLoading = false;
-      });
+      print('🔄 Auth state changed: ${user?.email ?? 'null'}');
+      print('🔄 Current _user before update: ${_user?.email ?? 'null'}');
+      if (mounted) {
+        setState(() {
+          _user = user;
+          _isLoading = false;
+        });
+        print('🔄 State updated, _user is now: ${_user?.email ?? 'null'}');
+      } else {
+        print('⚠️  Widget not mounted, cannot update state');
+      }
+    }, onError: (error) {
+      print('❌ Error in auth state stream: $error');
     });
   }
 
@@ -90,15 +100,20 @@ class _AuthWrapperState extends State<AuthWrapper> {
     try {
       // Check if user is already logged in
       final user = AuthService.currentUser;
-      setState(() {
-        _user = user;
-        _isLoading = false;
-      });
+      print('🔍 Initial auth state check: ${user?.email ?? 'null'}');
+      if (mounted) {
+        setState(() {
+          _user = user;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
       print('Error checking auth state: $e');
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -110,6 +125,23 @@ class _AuthWrapperState extends State<AuthWrapper> {
 
   @override
   Widget build(BuildContext context) {
+    // Always check the current auth state in build method as a fallback
+    final currentAuthUser = AuthService.currentUser;
+    print('🏗️  AuthWrapper build - isLoading: $_isLoading, _user: ${_user?.email ?? 'null'}, currentAuthUser: ${currentAuthUser?.email ?? 'null'}');
+    
+    // If our local state doesn't match the AuthService state, update it
+    if (_user != currentAuthUser) {
+      print('🔄 Auth state mismatch detected, updating local state');
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() {
+            _user = currentAuthUser;
+            _isLoading = false;
+          });
+        }
+      });
+    }
+    
     if (_isLoading) {
       return const Scaffold(
         backgroundColor: Color(0xFF0F172A),
@@ -134,9 +166,14 @@ class _AuthWrapperState extends State<AuthWrapper> {
       );
     }
 
-    if (_user != null) {
+    // Use the current auth state for the decision
+    final userToShow = _user ?? currentAuthUser;
+    
+    if (userToShow != null) {
+      print('📱 Showing DashboardScreen for user: ${userToShow.email}');
       return const DashboardScreen();
     } else {
+      print('🔐 Showing LoginScreen - no user logged in');
       return const LoginScreen();
     }
   }
@@ -443,6 +480,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
               _buildMobileNavItem(Icons.analytics, 'Analytics', 1),
               const SizedBox(width: 8),
               _buildMobileNavItem(Icons.history, 'History', 2),
+              const SizedBox(width: 8),
+              _buildMobileNavItem(Icons.settings, 'Settings', 3),
             ],
           ),
         ),
@@ -489,6 +528,120 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildMobileSettingsView() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Settings',
+            style: GoogleFonts.inter(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Manage your account and preferences',
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              color: const Color(0xFF94A3B8),
+            ),
+          ),
+          const SizedBox(height: 24),
+          
+          // User Info Card
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1E293B),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFF334155)),
+            ),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 24,
+                  backgroundColor: const Color(0xFF3B82F6),
+                  child: Text(
+                    AuthService.userEmail?.substring(0, 2).toUpperCase() ?? 'U',
+                    style: GoogleFonts.inter(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        AuthService.userDisplayName ?? 'User',
+                        style: GoogleFonts.inter(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 16,
+                        ),
+                      ),
+                      Text(
+                        AuthService.userEmail ?? 'user@example.com',
+                        style: GoogleFonts.inter(
+                          color: const Color(0xFF94A3B8),
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          
+          // Sign Out Button
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () async {
+                print('🔘 Mobile sign out button pressed');
+                await AuthService.signOut();
+                print('🔘 Mobile sign out completed');
+                
+                // Navigate to login page and clear the entire navigation stack
+                if (mounted) {
+                  Navigator.of(context).pushNamedAndRemoveUntil(
+                    '/login',
+                    (route) => false,
+                  );
+                }
+              },
+              icon: const Icon(Icons.logout, size: 20),
+              label: Text(
+                'Sign Out',
+                style: GoogleFonts.inter(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFFEF4444),
+                side: const BorderSide(color: Color(0xFFEF4444)),
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -727,9 +880,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       width: double.infinity,
                       child: OutlinedButton.icon(
                         onPressed: () async {
+                          print('🔘 Sign out button pressed');
                           await AuthService.signOut();
-                          // The AuthWrapper will automatically navigate to login page
-                          // when it receives the auth state change
+                          print('🔘 Sign out completed');
+                          
+                          // Navigate to login page and clear the entire navigation stack
+                          if (mounted) {
+                            Navigator.of(context).pushNamedAndRemoveUntil(
+                              '/login',
+                              (route) => false,
+                            );
+                          }
                         },
                         icon: const Icon(Icons.logout, size: 16),
                         label: Text(
@@ -807,6 +968,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         return const AnalyticsView();
       case 2:
         return const BuildHistoryView();
+      case 3:
+        return _buildMobileSettingsView();
       default:
         final selectedProject = _selectedProjectId != null && _projects.isNotEmpty
           ? _projects.firstWhere(
