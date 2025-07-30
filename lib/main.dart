@@ -68,11 +68,22 @@ class AuthWrapper extends StatefulWidget {
 class _AuthWrapperState extends State<AuthWrapper> {
   bool _isLoading = true;
   User? _user;
+  StreamSubscription<User?>? _authSubscription;
 
   @override
   void initState() {
     super.initState();
     _checkAuthState();
+    _listenToAuthChanges();
+  }
+
+  void _listenToAuthChanges() {
+    _authSubscription = AuthService.authStateChanges.listen((user) {
+      setState(() {
+        _user = user;
+        _isLoading = false;
+      });
+    });
   }
 
   Future<void> _checkAuthState() async {
@@ -89,6 +100,12 @@ class _AuthWrapperState extends State<AuthWrapper> {
         _isLoading = false;
       });
     }
+  }
+
+  @override
+  void dispose() {
+    _authSubscription?.cancel();
+    super.dispose();
   }
 
   @override
@@ -711,6 +728,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       child: OutlinedButton.icon(
                         onPressed: () async {
                           await AuthService.signOut();
+                          // The AuthWrapper will automatically navigate to login page
+                          // when it receives the auth state change
                         },
                         icon: const Icon(Icons.logout, size: 16),
                         label: Text(
